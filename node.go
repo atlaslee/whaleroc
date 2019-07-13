@@ -66,27 +66,34 @@ type Node struct {
 }
 
 const (
-	NODE_STARTUP_OK     = 100
-	NODE_STARTUP_FAILED = 101
+	NODECMD_SETROOT    = 200
+	NODECMD_SETTOPNODE = 201
+	NODECMD_SETNODE    = 202
+	NODECMD_SETLEAF    = 203
 )
 
 func (this *Node) backupRootLoop() bool {
+	zlog.Traceln("Backup as root.")
 	return true
 }
 
 func (this *Node) backupTopNodeLoop() bool {
+	zlog.Traceln("Backup as top node.")
 	return true
 }
 
 func (this *Node) backupNodeLoop() bool {
+	zlog.Traceln("Backup as node.")
 	return true
 }
 
 func (this *Node) backupLeafLoop() bool {
+	zlog.Traceln("Backup as leaf.")
 	return true
 }
 
 func (this *Node) backupClientLoop() bool {
+	zlog.Traceln("Backup as client.")
 	return true
 }
 
@@ -108,22 +115,27 @@ func (this *Node) backupLoop() bool {
 }
 
 func (this *Node) parentRootLoop() bool {
+	zlog.Traceln("Parent as root.")
 	return true
 }
 
 func (this *Node) parentTopNodeLoop() bool {
+	zlog.Traceln("Parent as top node.")
 	return true
 }
 
 func (this *Node) parentNodeLoop() bool {
+	zlog.Traceln("Parent as node.")
 	return true
 }
 
 func (this *Node) parentLeafLoop() bool {
+	zlog.Traceln("Parent as leaf.")
 	return true
 }
 
 func (this *Node) parentClientLoop() bool {
+	zlog.Traceln("Parent as client.")
 	return true
 }
 
@@ -145,22 +157,27 @@ func (this *Node) parentLoop() bool {
 }
 
 func (this *Node) childRootLoop() bool {
+	zlog.Traceln("Child as root.")
 	return true
 }
 
 func (this *Node) childTopNodeLoop() bool {
+	zlog.Traceln("Child as root.")
 	return true
 }
 
 func (this *Node) childNodeLoop() bool {
+	zlog.Traceln("Child as root.")
 	return true
 }
 
 func (this *Node) childLeafLoop() bool {
+	zlog.Traceln("Child as root.")
 	return true
 }
 
 func (this *Node) childClientLoop() bool {
+	zlog.Traceln("Child as root.")
 	return true
 }
 
@@ -182,16 +199,19 @@ func (this *Node) childLoop() bool {
 }
 
 func (this *Node) PreLoop() (err error) {
-	zlog.Debugln("Starting up.")
+	zlog.Debugln(this, "Starting up.")
 
+	zlog.Traceln("Connecting to address:", this.RemoteAddress.String())
 	this.Connection, err = net.DialTCP("tcp", nil, this.RemoteAddress)
 	if err != nil {
-		this.Server.SendCommand2(NODE_STARTUP_FAILED, this)
+		zlog.Warningln(this.RemoteAddress.String(), "connect failed.")
+		this.Server.SendCommand2(SERVERCMD_NODE_STARTUP_FAILED, this)
 		return
 	}
 
+	zlog.Infoln("Connection to", this.RemoteAddress.String(), "established.")
 	this.LifeCycle = LIFECYCLE_RUNNING
-	this.Server.SendCommand2(NODE_STARTUP_OK, this)
+	this.Server.SendCommand2(SERVERCMD_NODE_STARTUP_OK, this)
 	return
 }
 
@@ -208,12 +228,47 @@ func (this *Node) Loop() bool {
 }
 
 func (this *Node) AfterLoop() {
-	zlog.Debugln("Shut down.")
+	zlog.Debugln(this, "Shut down.")
 }
 
-func (this *Node) CommandHandle(command int, value interface{}) bool {
-	zlog.Traceln("Command", command, "received.")
+func (this *Node) setRoot() bool {
+	zlog.Infoln("Run as root.")
 	return true
+}
+
+func (this *Node) setTopNode() bool {
+	zlog.Infoln("Run as top node.")
+	return true
+}
+
+func (this *Node) setNode() bool {
+	zlog.Infoln("Run as node.")
+	return true
+}
+
+func (this *Node) setLeaf() bool {
+	zlog.Infoln("Run as leaf.")
+	return true
+}
+
+func (this *Node) CommandHandle(command int, from, data interface{}) (ok bool) {
+	zlog.Traceln("Command", command, from, data, "received.")
+
+	//node, _ := value.(*Node)
+
+	switch command {
+	case NODECMD_SETROOT:
+		ok = this.setRoot()
+	case NODECMD_SETTOPNODE:
+		ok = this.setTopNode()
+	case NODECMD_SETNODE:
+		ok = this.setNode()
+	case NODECMD_SETLEAF:
+		ok = this.setLeaf()
+	default:
+		return true
+	}
+	return
 }
 
 func NodeNew(address *net.TCPAddr, server *Server) (node *Node) {

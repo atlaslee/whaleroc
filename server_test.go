@@ -23,8 +23,29 @@ DEALINGS IN THE SOFTWARE.
 package dmt
 
 import (
+	"github.com/atlaslee/zlog"
 	"testing"
+	"time"
 )
 
 func TestServer(t *testing.T) {
+	zlog.Traceln("TestServer")
+
+	context := ContextNew("127.0.0.1:8000",
+		[]string{
+			"127.0.0.1:8000",
+			"127.0.0.1:8001",
+			/*"127.0.0.1:8002",
+			"127.0.0.1:8003",
+			"127.0.0.1:8004",
+			"127.0.0.1:8005",
+			"127.0.0.1:8006",
+			"127.0.0.1:8007",
+			"127.0.0.1:8008",*/
+			"127.0.0.1:8009"})
+
+	server := ServerNew(context)
+	server.Startup()
+	time.Sleep(2 * time.Second)
+	server.Shutdown()
 }

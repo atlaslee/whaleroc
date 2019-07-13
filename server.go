@@ -23,7 +23,6 @@ DEALINGS IN THE SOFTWARE.
 package dmt
 
 import (
-	"container/list"
 	"github.com/atlaslee/zlog"
 	"github.com/atlaslee/zsm"
 	"net"
@@ -42,6 +41,11 @@ const (
 	SERVERSTATUS_CLIENT
 )
 
+const (
+	SERVERCMD_NODE_STARTUP_OK     = 100
+	SERVERCMD_NODE_STARTUP_FAILED = 101
+)
+
 var SERVERSTATUSES []string = []string{
 	"SERVERSTATUS_ROOT",
 	"SERVERSTATUS_TOPNODE",
@@ -49,47 +53,9 @@ var SERVERSTATUSES []string = []string{
 	"SERVERSTATUS_LEAF",
 	"SERVERSTATUS_CLIENT"}
 
-type Context struct {
-	BindingAddress     *net.TCPAddr
-	Blocks             *list.List
-	LifeCycle          uint8
-	Listener           *net.TCPListener
-	Nodes              map[*net.TCPAddr]*Node
-	RecommandNodes     *list.List
-	ReserveNodes       map[*net.TCPAddr]uint64
-	Status             uint8
-	UnusedReserveNodes *list.List
-}
-
-func ContextNew(bindingAddress *net.TCPAddr, reserveNodes []*net.TCPAddr) (context *Context) {
-	context = &Context{
-		BindingAddress:     bindingAddress,
-		Blocks:             list.New(),
-		LifeCycle:          LIFECYCLE_INITIALIZING,
-		Nodes:              make(map[*net.TCPAddr]*Node, 0),
-		RecommandNodes:     list.New(),
-		ReserveNodes:       make(map[*net.TCPAddr]uint64),
-		Status:             SERVERSTATUS_ROOT,
-		UnusedReserveNodes: list.New()}
-	for n := 0; n < len(reserveNodes); n++ {
-		context.UnusedReserveNodes.PushBack(reserveNodes[n])
-	}
-	return
-}
-
 type Server struct {
 	zsm.StateMachine
 	Context *Context
-}
-
-func (this *Server) nodeStartUpOK(node *Node) (ok bool) {
-	node.ReceiveState()
-	return
-}
-
-func (this *Server) nodeStartUpFailed(node *Node) (ok bool) {
-	node.ReceiveState()
-	return
 }
 
 func (this *Server) runUnusedReserveNodes() {
@@ -105,39 +71,51 @@ func (this *Server) runUnusedReserveNodes() {
 	}
 }
 
-func (this *Server) rootLoop() bool {
-	return true
-}
-
-func (this *Server) topNodeLoop() bool {
-	return true
-}
-
-func (this *Server) nodeLoop() bool {
-	return true
-}
-
-func (this *Server) leafLoop() bool {
-	return true
-}
-
-func (this *Server) clientLoop() bool {
-	return true
+func (this *Server) waitForParent() {
 }
 
 func (this *Server) PreLoop() (err error) {
-	zlog.Debugln("Starting up.")
+	zlog.Debugln(this, "Starting up.")
 
+	zlog.Traceln("Binding address:", this.Context.BindingAddress.String())
 	this.Context.Listener, err = net.ListenTCP("tcp", this.Context.BindingAddress)
 	if err != nil {
 		return
 	}
 
 	this.runUnusedReserveNodes()
+
+	this.waitForParent()
 	return
 }
 
+func (this *Server) rootLoop() bool {
+	zlog.Traceln("Loop as root.")
+	return true
+}
+
+func (this *Server) topNodeLoop() bool {
+	zlog.Traceln("Loop as top node.")
+	return true
+}
+
+func (this *Server) nodeLoop() bool {
+	zlog.Traceln("Loop as node.")
+	return true
+}
+
+func (this *Server) leafLoop() bool {
+	zlog.Traceln("Loop as leaf.")
+	return true
+}
+
+func (this *Server) clientLoop() bool {
+	zlog.Traceln("Loop as client.")
+	return true
+}
+
 func (this *Server) Loop() bool {
+	zlog.Traceln("Looping.")
 	switch this.Context.Status {
 	case SERVERSTATUS_ROOT:
 		return this.rootLoop()
@@ -155,22 +133,35 @@ func (this *Server) Loop() bool {
 }
 
 func (this *Server) AfterLoop() {
-	zlog.Debugln("Shut down.")
+	zlog.Debugln(this, "Shut down.")
 }
 
-func (this *Server) CommandHandle(command int, value interface{}) (ok bool) {
-	zlog.Traceln("Command", command, "received.")
+func (this *Server) nodeStartUpOK(node *Node) (ok bool) {
+	node.ReceiveState()
+	return true
+}
 
-	node, _ := value.(*Node)
+func (this *Server) nodeStartUpFailed(node *Node) (ok bool) {
+	//node.ReceiveState()
+	return true
+}
+
+func (this *Server) CommandHandle(command int, from, data interface{}) (ok bool) {
+	zlog.Traceln("Command", command, from, data, "received.")
+
+	var node *Node = nil
+	if from != nil {
+		node, _ = from.(*Node)
+	}
 
 	switch command {
-	case NODE_STARTUP_OK:
+	case SERVERCMD_NODE_STARTUP_OK:
 		ok = this.nodeStartUpOK(node)
-	case NODE_STARTUP_FAILED:
+	case SERVERCMD_NODE_STARTUP_FAILED:
 		ok = this.nodeStartUpFailed(node)
 	default:
 	}
-	return
+	return ok
 }
 
 func ServerNew(context *Context) (server *Server) {
