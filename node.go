@@ -30,21 +30,6 @@ import (
 )
 
 const (
-	LIFECYCLE_INITIALIZING = iota
-	LIFECYCLE_RUNNING
-	LIFECYCLE_PAUSING
-	LIFECYCLE_RESUMING
-	LIFECYCLE_SHUTTING
-)
-
-var LIFECYCLES []string = []string{
-	"LIFECYCLE_INITIALIZING",
-	"LIFECYCLE_RUNNING",
-	"LIFECYCLE_PAUSING",
-	"LIFECYCLE_RESUMING",
-	"LIFECYCLE_SHUTTING"}
-
-const (
 	NODESTATUS_BACKUP = iota
 	NODESTATUS_PARENT
 	NODESTATUS_CHILD
@@ -57,19 +42,17 @@ var NODESTATUSES []string = []string{
 
 type Node struct {
 	zsm.StateMachine
-	Blocks        *list.List
-	Connection    *net.TCPConn
-	LifeCycle     uint8
-	RemoteAddress *net.TCPAddr
-	Server        *Server
-	Status        uint8
+	Blocks                      *list.List
+	Connection                  *net.TCPConn
+	LifeCycle                   uint8
+	LocalAddress, RemoteAddress *net.TCPAddr
+	Server                      *Server
+	Status                      uint8
 }
 
 const (
-	NODECMD_SETROOT    = 200
-	NODECMD_SETTOPNODE = 201
-	NODECMD_SETNODE    = 202
-	NODECMD_SETLEAF    = 203
+	NODECMD_SERVER_CHANGESTATUS    = 200
+	NODECMD_SERVER_CHANGELIFECYCLE = 201
 )
 
 func (this *Node) backupRootLoop() bool {
@@ -231,23 +214,8 @@ func (this *Node) AfterLoop() {
 	zlog.Debugln(this, "Shut down.")
 }
 
-func (this *Node) setRoot() bool {
+func (this *Node) serverChangeStatusEvent() bool {
 	zlog.Infoln("Run as root.")
-	return true
-}
-
-func (this *Node) setTopNode() bool {
-	zlog.Infoln("Run as top node.")
-	return true
-}
-
-func (this *Node) setNode() bool {
-	zlog.Infoln("Run as node.")
-	return true
-}
-
-func (this *Node) setLeaf() bool {
-	zlog.Infoln("Run as leaf.")
 	return true
 }
 
@@ -257,16 +225,8 @@ func (this *Node) CommandHandle(command int, from, data interface{}) (ok bool) {
 	//node, _ := value.(*Node)
 
 	switch command {
-	case NODECMD_SETROOT:
-		ok = this.setRoot()
-	case NODECMD_SETTOPNODE:
-		ok = this.setTopNode()
-	case NODECMD_SETNODE:
-		ok = this.setNode()
-	case NODECMD_SETLEAF:
-		ok = this.setLeaf()
-	default:
-		return true
+	case NODECMD_SERVER_CHANGESTATUS:
+		ok = this.serverChangeStatusEvent()
 	}
 	return
 }
