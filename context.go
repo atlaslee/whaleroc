@@ -26,18 +26,40 @@ import (
 	"container/list"
 	"github.com/atlaslee/zlog"
 	"net"
+	"time"
+)
+
+const (
+	LIFECYCLE_INITIALIZING = iota
+	LIFECYCLE_PARENT_SEARCHING
+	LIFECYCLE_RUNNING
+	LIFECYCLE_SHUTTING
+)
+
+var LIFECYCLES []string = []string{
+	"LIFECYCLE_INITIALIZING",
+	"LIFECYCLE_PARENT_SEARCHING",
+	"LIFECYCLE_RUNNING",
+	"LIFECYCLE_SHUTTING"}
+
+const (
+	SERVERSTATUS_ROOT = iota
+	SERVERSTATUS_TOPNODE
+	SERVERSTATUS_NODE
+	SERVERSTATUS_LEAF
+	SERVERSTATUS_CLIENT
 )
 
 type Context struct {
-	BindingAddress     *net.TCPAddr
-	Blocks             *list.List
-	LifeCycle          uint8
-	Listener           *net.TCPListener
-	Nodes              map[*net.TCPAddr]*Node
-	RecommandNodes     *list.List
-	ReserveNodes       map[*net.TCPAddr]uint64
-	Status             uint8
-	UnusedReserveNodes *list.List
+	BindingAddress   *net.TCPAddr
+	Blocks           *list.List
+	LifeCycle        uint8
+	Listener         *net.TCPListener
+	Nodes            map[*net.TCPAddr]*Node
+	RecommandNodes   *list.List
+	ReserveNodes     map[*net.TCPAddr]uint64
+	Status           uint8
+	UnavailableNodes map[*net.TCPAddr]time.Time
 }
 
 func ContextNew(bindingAddress string, reserveNodes []string) (context *Context) {
@@ -47,14 +69,14 @@ func ContextNew(bindingAddress string, reserveNodes []string) (context *Context)
 	}
 
 	context = &Context{
-		BindingAddress:     tcpAddress,
-		Blocks:             list.New(),
-		LifeCycle:          LIFECYCLE_INITIALIZING,
-		Nodes:              make(map[*net.TCPAddr]*Node, 0),
-		RecommandNodes:     list.New(),
-		ReserveNodes:       make(map[*net.TCPAddr]uint64),
-		Status:             SERVERSTATUS_ROOT,
-		UnusedReserveNodes: list.New()}
+		BindingAddress:   tcpAddress,
+		Blocks:           list.New(),
+		LifeCycle:        LIFECYCLE_INITIALIZING,
+		Nodes:            make(map[*net.TCPAddr]*Node),
+		RecommandNodes:   list.New(),
+		ReserveNodes:     make(map[*net.TCPAddr]uint64),
+		Status:           SERVERSTATUS_ROOT,
+		UnavailableNodes: make(map[*net.TCPAddr]time.Time)}
 
 	for n := 0; n < len(reserveNodes); n++ {
 		if bindingAddress == reserveNodes[n] {
@@ -68,7 +90,7 @@ func ContextNew(bindingAddress string, reserveNodes []string) (context *Context)
 			continue
 		}
 
-		context.UnusedReserveNodes.PushBack(address)
+		context.UnavailableNodes[address] = time.Unix(0, 0)
 	}
 	return
 }
