@@ -26,19 +26,12 @@ import (
 	"github.com/atlaslee/zlog"
 	"github.com/atlaslee/zsm"
 	"net"
+	"time"
 )
 
 const (
 	NUMBEROF_BACKUP   = 5
 	NUMBEROF_CHILDREN = 10
-)
-
-const (
-	SERVERSTATUS_ROOT = iota
-	SERVERSTATUS_TOPNODE
-	SERVERSTATUS_NODE
-	SERVERSTATUS_LEAF
-	SERVERSTATUS_CLIENT
 )
 
 const (
@@ -58,20 +51,16 @@ type Server struct {
 	Context *Context
 }
 
-func (this *Server) runUnusedReserveNodes() {
-	unusedReserveNodeElement := this.Context.UnusedReserveNodes.Front()
-	for n := 0; n < this.Context.UnusedReserveNodes.Len(); n++ {
-		address, ok := unusedReserveNodeElement.Value.(*net.TCPAddr)
-		if ok {
+func (this *Server) runUnavailableNodes() {
+	for address, lastTime := range this.Context.UnavailableNodes {
+		zlog.Traceln(time.Now().UnixNano()-lastTime.UnixNano(), 12*60*60*1000*1000)
+		if time.Now().UnixNano()-lastTime.UnixNano() > 12*60*60*1000*1000 {
 			node := NodeNew(address, this)
 			go node.Run()
+
+			delete(this.Context.UnavailableNodes, address)
 		}
-
-		unusedReserveNodeElement = unusedReserveNodeElement.Next()
 	}
-}
-
-func (this *Server) waitForParent() {
 }
 
 func (this *Server) PreLoop() (err error) {
@@ -83,9 +72,9 @@ func (this *Server) PreLoop() (err error) {
 		return
 	}
 
-	this.runUnusedReserveNodes()
+	this.runUnavailableNodes()
 
-	this.waitForParent()
+	this.Context.LifeCycle = LIFECYCLE_PARENT_SEARCHING
 	return
 }
 
@@ -114,54 +103,90 @@ func (this *Server) clientLoop() bool {
 	return true
 }
 
+func (this *Server) searchParent() {
+	tick := time.Tick(10 * time.Second)
+	for {
+		select {
+		case <-tick:
+			return
+		default:
+			if len(this.Context.Nodes) == 0 {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+
+			this.Context.Status = SERVERSTATUS_TOPNODE
+			return
+		}
+	}
+}
+
 func (this *Server) Loop() bool {
+	if this.Context.LifeCycle == LIFECYCLE_PARENT_SEARCHING {
+		zlog.Infoln("Looking for parent nodes.")
+		this.searchParent()
+
+		this.Context.LifeCycle = LIFECYCLE_RUNNING
+	}
 	zlog.Traceln("Looping.")
+
 	switch this.Context.Status {
 	case SERVERSTATUS_ROOT:
 		return this.rootLoop()
+
 	case SERVERSTATUS_TOPNODE:
 		return this.topNodeLoop()
+
 	case SERVERSTATUS_NODE:
 		return this.nodeLoop()
+
 	case SERVERSTATUS_LEAF:
 		return this.leafLoop()
+
 	case SERVERSTATUS_CLIENT:
 		return this.clientLoop()
-	default:
-		return true
 	}
+	return true
 }
 
 func (this *Server) AfterLoop() {
 	zlog.Debugln(this, "Shut down.")
 }
 
-func (this *Server) nodeStartUpOK(node *Node) (ok bool) {
+func (this *Server) nodeStartUpOk(from interface{}) (ok bool) {
+	node, ok := from.(*Node)
+	if !ok {
+		return true
+	}
+
 	node.ReceiveState()
-	return true
+	this.Context.Nodes[node.RemoteAddress] = node
+	this.Context.ReserveNodes[node.RemoteAddress] = 0
+	return
 }
 
-func (this *Server) nodeStartUpFailed(node *Node) (ok bool) {
-	//node.ReceiveState()
-	return true
+func (this *Server) nodeStartUpFailed(from interface{}) (ok bool) {
+	node, ok := from.(*Node)
+	if !ok {
+		return true
+	}
+
+	node.ReceiveState()
+	this.Context.UnavailableNodes[node.RemoteAddress] = time.Now()
+	return
 }
 
 func (this *Server) CommandHandle(command int, from, data interface{}) (ok bool) {
 	zlog.Traceln("Command", command, from, data, "received.")
 
-	var node *Node = nil
-	if from != nil {
-		node, _ = from.(*Node)
-	}
-
 	switch command {
 	case SERVERCMD_NODE_STARTUP_OK:
-		ok = this.nodeStartUpOK(node)
+		this.nodeStartUpOk(from)
+
 	case SERVERCMD_NODE_STARTUP_FAILED:
-		ok = this.nodeStartUpFailed(node)
-	default:
+		this.nodeStartUpFailed(from)
 	}
-	return ok
+	return
 }
 
 func ServerNew(context *Context) (server *Server) {
