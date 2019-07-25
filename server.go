@@ -29,170 +29,351 @@ import (
 	"time"
 )
 
-const (
-	NUMBEROF_BACKUP   = 5
-	NUMBEROF_CHILDREN = 10
-)
-
-const (
-	SERVERCMD_NODE_STARTUP_OK     = 100
-	SERVERCMD_NODE_STARTUP_FAILED = 101
-)
-
-var SERVERSTATUSES []string = []string{
-	"SERVERSTATUS_ROOT",
-	"SERVERSTATUS_TOPNODE",
-	"SERVERSTATUS_NODE",
-	"SERVERSTATUS_LEAF",
-	"SERVERSTATUS_CLIENT"}
-
-type Server struct {
+type Acceptor struct {
 	zsm.StateMachine
-	Context *Context
+	server *Server
 }
 
-func (this *Server) runUnavailableNodes() {
-	for address, lastTime := range this.Context.UnavailableNodes {
-		zlog.Traceln(time.Now().UnixNano()-lastTime.UnixNano(), 12*60*60*1000*1000)
-		if time.Now().UnixNano()-lastTime.UnixNano() > 12*60*60*1000*1000 {
-			node := NodeNew(address, this)
-			go node.Run()
-
-			delete(this.Context.UnavailableNodes, address)
-		}
-	}
-}
-
-func (this *Server) PreLoop() (err error) {
+func (this *Acceptor) PreLoop() (err error) {
 	zlog.Debugln(this, "Starting up.")
+	return
+}
 
-	zlog.Traceln("Binding address:", this.Context.BindingAddress.String())
-	this.Context.Listener, err = net.ListenTCP("tcp", this.Context.BindingAddress)
+func (this *Acceptor) Loop() (ok bool, err error) {
+	conn, err := this.server.Listener().AcceptTCP()
 	if err != nil {
+		zlog.Fatalln("Acceptor:", this, "failed:", err)
+		ok = false
+		return
+	}
+	this.server.ChildSupervisor().CreateChild(conn)
+	return
+}
+
+func (this *Acceptor) AfterLoop() {
+}
+
+func (this *Acceptor) CommandHandle(message *zsm.Message) (bool, error) {
+	return true, nil
+}
+
+func AcceptorNew(server *Server) (acceptor *Acceptor) {
+	acceptor = &Acceptor{
+		server: server}
+
+	acceptor.Init(acceptor)
+	return
+}
+
+// -----------------------------------------------------------------------------
+
+type Child struct {
+	zsm.StateMachine
+	server     *Server
+	conn       *net.TCPConn
+	remoteAddr *net.TCPAddr
+}
+
+func (this *Child) PreLoop() (err error) {
+	zlog.Debugln(this, "Starting up.")
+	return
+}
+
+func (this *Child) Loop() (ok bool, err error) {
+	<-time.After(100 * time.Millisecond)
+	return
+}
+
+func (this *Child) AfterLoop() {
+}
+
+func (this *Child) CommandHandle(msg *zsm.Message) (bool, error) {
+	return true, nil
+}
+
+func ChildNew(server *Server) (cld *Child) {
+	cld = &Child{
+		server: server}
+
+	cld.Init(cld)
+	return
+}
+
+// -----------------------------------------------------------------------------
+
+const (
+	CLDSPVS_CMD_CREATECHILD = 1
+)
+
+type ChildSupervisor struct {
+	zsm.StateMachine
+	server   *Server
+	children map[*net.TCPConn]*Child
+}
+
+func (this *ChildSupervisor) CreateChild(conn *net.TCPConn) {
+	this.SendMessage3(CLDSPVS_CMD_CREATECHILD, this, conn)
+}
+
+func (this *ChildSupervisor) PreLoop() (err error) {
+	zlog.Debugln(this, "Starting up.")
+	return
+}
+
+func (this *ChildSupervisor) Loop() (ok bool, err error) {
+	<-time.After(100 * time.Millisecond)
+	return
+}
+
+func (this *ChildSupervisor) AfterLoop() {
+}
+
+func (this *ChildSupervisor) CommandHandle(msg *zsm.Message) (bool, error) {
+	return true, nil
+}
+
+func ChildSupervisorNew(server *Server) (cldspvs *ChildSupervisor) {
+	cldspvs = &ChildSupervisor{
+		server: server}
+
+	cldspvs.Init(cldspvs)
+	return
+}
+
+// -----------------------------------------------------------------------------
+
+var DEFAULT_STARTUP_NODES []string = []string{
+	"127.0.0.1:8000",
+	"127.0.0.1:8001",
+	"127.0.0.1:8002",
+	"127.0.0.1:8003",
+	"127.0.0.1:8004",
+	"127.0.0.1:8005",
+	"127.0.0.1:8006",
+	"127.0.0.1:8007",
+	"127.0.0.1:8008",
+	"127.0.0.1:8009"}
+
+type Context struct {
+	bindingAddress *net.TCPAddr
+	defaultNodes   []*net.TCPAddr
+	startupNodes   []*net.TCPAddr
+}
+
+func (this *Context) BindingAddress() *net.TCPAddr {
+	return this.bindingAddress
+}
+
+func (this *Context) DefaultNodes() []*net.TCPAddr {
+	return this.defaultNodes
+}
+
+func (this *Context) StartupNodes() []*net.TCPAddr {
+	return this.startupNodes
+}
+
+func ContextNew(bindingAddress string, startupNodes []string) (ctx *Context) {
+	tcpAddress, err := net.ResolveTCPAddr("tcp", bindingAddress)
+	if err != nil {
+		zlog.Fatalln("Ctx:", nil, "failed:", err)
 		return
 	}
 
-	this.runUnavailableNodes()
+	ctx = &Context{
+		bindingAddress: tcpAddress,
+		defaultNodes:   make([]*net.TCPAddr, 10),
+		startupNodes:   make([]*net.TCPAddr, 10)}
 
-	this.Context.LifeCycle = LIFECYCLE_PARENT_SEARCHING
+	for n := 0; n < len(DEFAULT_STARTUP_NODES); n++ {
+		if DEFAULT_STARTUP_NODES[n] == bindingAddress {
+			zlog.Warningln("Ctx:", ctx, "skipped:", DEFAULT_STARTUP_NODES[n])
+			continue
+		}
+
+		address, err := net.ResolveTCPAddr("tcp", DEFAULT_STARTUP_NODES[n])
+		if err != nil {
+			zlog.Warningln("Ctx:", ctx, "skipped:", DEFAULT_STARTUP_NODES[n])
+			continue
+		}
+
+		ctx.defaultNodes = append(ctx.defaultNodes, address)
+	}
+
+	for n := 0; n < len(startupNodes); n++ {
+		if startupNodes[n] == bindingAddress {
+			zlog.Warningln("Ctx:", ctx, "skipped:", startupNodes[n])
+			continue
+		}
+
+		address, err := net.ResolveTCPAddr("tcp", startupNodes[n])
+		if err != nil {
+			zlog.Warningln("Ctx:", ctx, "skipped:", startupNodes[n])
+			continue
+		}
+
+		ctx.startupNodes = append(ctx.startupNodes, address)
+	}
 	return
 }
 
-func (this *Server) rootLoop() bool {
-	zlog.Traceln("Loop as root.")
-	return true
+// -----------------------------------------------------------------------------
+
+type Parent struct {
+	zsm.StateMachine
+	server     *Server
+	conn       *net.TCPConn
+	remoteAddr *net.TCPAddr
 }
 
-func (this *Server) topNodeLoop() bool {
-	zlog.Traceln("Loop as top node.")
-	return true
+func (this *Parent) PreLoop() (err error) {
+	zlog.Debugln(this, "Starting up.")
+	return
 }
 
-func (this *Server) nodeLoop() bool {
-	zlog.Traceln("Loop as node.")
-	return true
+func (this *Parent) Loop() (ok bool, err error) {
+	<-time.After(100 * time.Millisecond)
+	return
 }
 
-func (this *Server) leafLoop() bool {
-	zlog.Traceln("Loop as leaf.")
-	return true
+func (this *Parent) AfterLoop() {
 }
 
-func (this *Server) clientLoop() bool {
-	zlog.Traceln("Loop as client.")
-	return true
+func (this *Parent) CommandHandle(msg *zsm.Message) (bool, error) {
+	return true, nil
 }
 
-func (this *Server) searchParent() {
-	tick := time.Tick(10 * time.Second)
-	for {
-		select {
-		case <-tick:
-			return
-		default:
-			if len(this.Context.Nodes) == 0 {
-				time.Sleep(10 * time.Millisecond)
-				continue
-			}
+func ParentNew(server *Server) (prt *Parent) {
+	prt = &Parent{
+		server: server}
 
-			this.Context.Status = SERVERSTATUS_TOPNODE
-			return
-		}
+	prt.Init(prt)
+	return
+}
+
+// -----------------------------------------------------------------------------
+
+type ParentSupervisor struct {
+	zsm.StateMachine
+	server  *Server
+	backups map[*net.TCPAddr]*Parent
+	parent  *Parent
+}
+
+func (this *ParentSupervisor) PreLoop() (err error) {
+	zlog.Debugln(this, "Starting up.")
+	return
+}
+
+func (this *ParentSupervisor) Loop() (ok bool, err error) {
+	<-time.After(100 * time.Millisecond)
+	return
+}
+
+func (this *ParentSupervisor) AfterLoop() {
+}
+
+func (this *ParentSupervisor) CommandHandle(msg *zsm.Message) (bool, error) {
+	return true, nil
+}
+
+func ParentSupervisorNew(server *Server) (prtspvs *ParentSupervisor) {
+	prtspvs = &ParentSupervisor{
+		server: server}
+
+	prtspvs.Init(prtspvs)
+	return
+}
+
+// -----------------------------------------------------------------------------
+
+type Server struct {
+	zsm.StateMachine
+	id               int
+	context          *Context
+	listener         *net.TCPListener
+	acceptor         *Acceptor
+	parent           *Parent
+	backups          map[*net.TCPAddr]*Parent
+	parentSupervisor *ParentSupervisor
+	children         map[*net.TCPConn]*Child
+	childSupervisor  *ChildSupervisor
+}
+
+func (this *Server) Acceptor() *Acceptor {
+	return this.acceptor
+}
+
+func (this *Server) Backup(remoteAddress *net.TCPAddr) (backup *Parent) {
+	backup, _ = this.backups[remoteAddress]
+	return
+}
+
+func (this *Server) Backups() map[*net.TCPAddr]*Parent {
+	return this.backups
+}
+
+func (this *Server) Children() map[*net.TCPConn]*Child {
+	return this.children
+}
+
+func (this *Server) ChildSupervisor() *ChildSupervisor {
+	return this.childSupervisor
+}
+
+func (this *Server) Context() *Context {
+	return this.context
+}
+
+func (this *Server) ID() int {
+	return this.id
+}
+
+func (this *Server) Listener() *net.TCPListener {
+	return this.listener
+}
+
+func (this *Server) Parent() (parent *Parent) {
+	return this.parent
+}
+
+func (this *Server) PreLoop() (err error) {
+	zlog.Debugln("SVR:", this.id, "starting up")
+
+	zlog.Traceln("SVR:", this.id, "binding address:", this.context.BindingAddress().String())
+	this.listener, err = net.ListenTCP("tcp", this.context.BindingAddress())
+	if err != nil {
+		zlog.Fatalln("SVR:", this.id, "failed:", err)
+		return
 	}
+
+	this.parentSupervisor = ParentSupervisorNew(this)
+	this.parentSupervisor.Run()
+
+	zsm.WaitForStartupTimeout(this.parentSupervisor, 5*time.Second)
+
+	this.childSupervisor = ChildSupervisorNew(this)
+	this.childSupervisor.Run()
+	return
 }
 
-func (this *Server) Loop() bool {
-	if this.Context.LifeCycle == LIFECYCLE_PARENT_SEARCHING {
-		zlog.Infoln("Looking for parent nodes.")
-		this.searchParent()
-
-		this.Context.LifeCycle = LIFECYCLE_RUNNING
-	}
-	zlog.Traceln("Looping.")
-
-	switch this.Context.Status {
-	case SERVERSTATUS_ROOT:
-		return this.rootLoop()
-
-	case SERVERSTATUS_TOPNODE:
-		return this.topNodeLoop()
-
-	case SERVERSTATUS_NODE:
-		return this.nodeLoop()
-
-	case SERVERSTATUS_LEAF:
-		return this.leafLoop()
-
-	case SERVERSTATUS_CLIENT:
-		return this.clientLoop()
-	}
-	return true
+func (this *Server) Loop() (bool, error) {
+	<-time.After(100 * time.Millisecond)
+	return true, nil
 }
 
 func (this *Server) AfterLoop() {
-	zlog.Debugln(this, "Shut down.")
+	zlog.Debugln("SVR:", this.id, "shutdown")
 }
 
-func (this *Server) nodeStartUpOk(from interface{}) (ok bool) {
-	node, ok := from.(*Node)
-	if !ok {
-		return true
-	}
-
-	node.ReceiveState()
-	this.Context.Nodes[node.RemoteAddress] = node
-	this.Context.ReserveNodes[node.RemoteAddress] = 0
-	return
-}
-
-func (this *Server) nodeStartUpFailed(from interface{}) (ok bool) {
-	node, ok := from.(*Node)
-	if !ok {
-		return true
-	}
-
-	node.ReceiveState()
-	this.Context.UnavailableNodes[node.RemoteAddress] = time.Now()
-	return
-}
-
-func (this *Server) CommandHandle(command int, from, data interface{}) (ok bool) {
-	zlog.Traceln("Command", command, from, data, "received.")
-
-	switch command {
-	case SERVERCMD_NODE_STARTUP_OK:
-		this.nodeStartUpOk(from)
-
-	case SERVERCMD_NODE_STARTUP_FAILED:
-		this.nodeStartUpFailed(from)
-	}
-	return
+func (this *Server) CommandHandle(message *zsm.Message) (bool, error) {
+	return true, nil
 }
 
 func ServerNew(context *Context) (server *Server) {
 	server = &Server{
-		StateMachine: zsm.StateMachine{},
-		Context:      context}
+		context:  context,
+		backups:  make(map[*net.TCPAddr]*Parent),
+		children: make(map[*net.TCPConn]*Child)}
 
 	server.Init(server)
 	return
