@@ -23,13 +23,8 @@ DEALINGS IN THE SOFTWARE.
 package dmt
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"github.com/atlaslee/zlog"
 	"github.com/atlaslee/zsm"
-	"golang.org/x/crypto/ripemd160"
-	"io"
 	"net"
 	"time"
 )
@@ -53,12 +48,15 @@ func (this *Account) Verify() {
 }
 
 func AccountNew() *Account {
+	return nil
 }
 
 func AccountLoad(rand []byte) *Account {
+	return nil
 }
 
 func AccountLoadFromMnemonic(mnemonic []string) *Account {
+	return nil
 }
 
 // -----------------------------------------------------------------------------
