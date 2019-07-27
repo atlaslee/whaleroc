@@ -23,10 +23,30 @@ DEALINGS IN THE SOFTWARE.
 package dmt
 
 import (
-	"net"
+	"github.com/atlaslee/zlog"
+	"github.com/atlaslee/zsm"
+	"testing"
+	"time"
 )
 
-type Message struct {
-	Message string
-	Routers []*net.TCPAddr
+func TestServer(t *testing.T) {
+	zlog.Traceln("TestServer")
+
+	context1 := ContextNew("127.0.0.1:8000",
+		[]string{
+			/*"127.0.0.1:8000",
+			"127.0.0.1:8001",
+			"127.0.0.1:8002",
+			"127.0.0.1:8003",
+			"127.0.0.1:8004",*/
+			"127.0.0.1:8005",
+			"127.0.0.1:8006",
+			"127.0.0.1:8007",
+			"127.0.0.1:8008",
+			"127.0.0.1:8009"})
+
+	server1 := ServerNew(context1)
+	server1.Startup()
+	zsm.WaitForStartupTimeout(server1, 5*time.Second)
+	server1.Shutdown()
 }

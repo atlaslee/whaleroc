@@ -23,14 +23,92 @@ DEALINGS IN THE SOFTWARE.
 package dmt
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"github.com/atlaslee/zlog"
 	"github.com/atlaslee/zsm"
+	"golang.org/x/crypto/ripemd160"
+	"io"
 	"net"
 	"time"
 )
 
+// -----------------------------------------------------------------------------
+
+// 账号
+type Account struct {
+	Address  string
+	PriKey   []byte
+	PubKey   []byte
+	Mnemonic []string
+}
+
+func (this *Account) Sign() {
+
+}
+
+func (this *Account) Verify() {
+
+}
+
+func AccountNew() *Account {
+}
+
+func AccountLoad(rand []byte) *Account {
+}
+
+func AccountLoadFromMnemonic(mnemonic []string) *Account {
+}
+
+// -----------------------------------------------------------------------------
+
+// 签名
+type Signature struct {
+}
+
+// -----------------------------------------------------------------------------
+
+// 工资
+type Wage struct {
+}
+
+// -----------------------------------------------------------------------------
+
+// 区块
+type Block struct {
+}
+
+func BlockNew() *Block {
+}
+
+func BlockGen() *Block {
+}
+
+// -----------------------------------------------------------------------------
+
+// 版本
+type Version struct {
+}
+
+// -----------------------------------------------------------------------------
+
+// 协议头
+type Header struct {
+}
+
+// -----------------------------------------------------------------------------
+
+// 协议
+type Protocol struct {
+}
+
+// -----------------------------------------------------------------------------
+
+// 接收器
+// 负责监听端口，接收外部请求并通知子节点监管者
 type Acceptor struct {
-	zsm.StateMachine
+	zsm.Monitor
 	server *Server
 }
 
@@ -40,6 +118,7 @@ func (this *Acceptor) PreLoop() (err error) {
 }
 
 func (this *Acceptor) Loop() (ok bool, err error) {
+	// 监听Listener
 	conn, err := this.server.Listener().AcceptTCP()
 	if err != nil {
 		zlog.Fatalln("Acceptor:", this, "failed:", err)
@@ -51,6 +130,7 @@ func (this *Acceptor) Loop() (ok bool, err error) {
 }
 
 func (this *Acceptor) AfterLoop() {
+	this.server.Listener.Close()
 }
 
 func (this *Acceptor) CommandHandle(message *zsm.Message) (bool, error) {
@@ -67,8 +147,11 @@ func AcceptorNew(server *Server) (acceptor *Acceptor) {
 
 // -----------------------------------------------------------------------------
 
+// 子节点
+// 负责广播数据给子节点
+// 同时也接收子节点请求
 type Child struct {
-	zsm.StateMachine
+	zsm.Monitor
 	server     *Server
 	conn       *net.TCPConn
 	remoteAddr *net.TCPAddr
@@ -106,13 +189,13 @@ const (
 )
 
 type ChildSupervisor struct {
-	zsm.StateMachine
+	zsm.Monitor
 	server   *Server
 	children map[*net.TCPConn]*Child
 }
 
 func (this *ChildSupervisor) CreateChild(conn *net.TCPConn) {
-	this.SendMessage3(CLDSPVS_CMD_CREATECHILD, this, conn)
+	this.SendMsg3(CLDSPVS_CMD_CREATECHILD, this, conn)
 }
 
 func (this *ChildSupervisor) PreLoop() (err error) {
@@ -121,6 +204,7 @@ func (this *ChildSupervisor) PreLoop() (err error) {
 }
 
 func (this *ChildSupervisor) Loop() (ok bool, err error) {
+	// 选择更合适的Child
 	<-time.After(100 * time.Millisecond)
 	return
 }
@@ -181,8 +265,8 @@ func ContextNew(bindingAddress string, startupNodes []string) (ctx *Context) {
 
 	ctx = &Context{
 		bindingAddress: tcpAddress,
-		defaultNodes:   make([]*net.TCPAddr, 10),
-		startupNodes:   make([]*net.TCPAddr, 10)}
+		defaultNodes:   make([]*net.TCPAddr, 1),
+		startupNodes:   make([]*net.TCPAddr, 1)}
 
 	for n := 0; n < len(DEFAULT_STARTUP_NODES); n++ {
 		if DEFAULT_STARTUP_NODES[n] == bindingAddress {
@@ -219,10 +303,14 @@ func ContextNew(bindingAddress string, startupNodes []string) (ctx *Context) {
 // -----------------------------------------------------------------------------
 
 type Parent struct {
-	zsm.StateMachine
+	zsm.Monitor
 	server     *Server
 	conn       *net.TCPConn
 	remoteAddr *net.TCPAddr
+}
+
+func (this *Parent) RemoteAddr() *net.TCPAddr {
+	return this.remoteAddr
 }
 
 func (this *Parent) PreLoop() (err error) {
@@ -252,24 +340,56 @@ func ParentNew(server *Server) (prt *Parent) {
 
 // -----------------------------------------------------------------------------
 
+const (
+	PRTSPVS_CMD_CREATEPARENT = 1
+)
+
 type ParentSupervisor struct {
-	zsm.StateMachine
+	zsm.Monitor
 	server  *Server
 	backups map[*net.TCPAddr]*Parent
 	parent  *Parent
 }
 
+func (this *ParentSupervisor) createParent(addr *net.TCPAddr) {
+	if this.server.Context().BindingAddress().String() == addr.String() {
+		return
+	}
+
+	if this.parent != nil && this.parent.RemoteAddr().String() == addr.String() {
+		return
+	}
+
+	for k, _ := range this.backups {
+		if k.String() == addr.String() {
+			return
+		}
+	}
+
+	parent := ParentNew(this.server)
+	this.backups[addr] = parent
+	go parent.Run()
+}
+
+func (this *ParentSupervisor) CreateParent(addr *net.TCPAddr) {
+	this.SendMsg3(PRTSPVS_CMD_CREATEPARENT, this, addr)
+}
+
 func (this *ParentSupervisor) PreLoop() (err error) {
-	zlog.Debugln(this, "Starting up.")
+	zlog.Debugln("PS:", this, "starting")
 	return
 }
 
 func (this *ParentSupervisor) Loop() (ok bool, err error) {
+	// 1. 补充backups
+	// 2. 发现更合适的parent
+	// 3. 清理无效backups
 	<-time.After(100 * time.Millisecond)
 	return
 }
 
 func (this *ParentSupervisor) AfterLoop() {
+	zlog.Debugln("PS:", this, "stopping")
 }
 
 func (this *ParentSupervisor) CommandHandle(msg *zsm.Message) (bool, error) {
@@ -278,8 +398,9 @@ func (this *ParentSupervisor) CommandHandle(msg *zsm.Message) (bool, error) {
 
 func ParentSupervisorNew(server *Server) (prtspvs *ParentSupervisor) {
 	prtspvs = &ParentSupervisor{
-		server: server}
-
+		server:  server,
+		backups: server.backups,
+		parent:  server.parent}
 	prtspvs.Init(prtspvs)
 	return
 }
@@ -287,7 +408,7 @@ func ParentSupervisorNew(server *Server) (prtspvs *ParentSupervisor) {
 // -----------------------------------------------------------------------------
 
 type Server struct {
-	zsm.StateMachine
+	zsm.Monitor
 	id               int
 	context          *Context
 	listener         *net.TCPListener
@@ -337,7 +458,7 @@ func (this *Server) Parent() (parent *Parent) {
 }
 
 func (this *Server) PreLoop() (err error) {
-	zlog.Debugln("SVR:", this.id, "starting up")
+	zlog.Debugln("SVR:", this.id, "starting")
 
 	zlog.Traceln("SVR:", this.id, "binding address:", this.context.BindingAddress().String())
 	this.listener, err = net.ListenTCP("tcp", this.context.BindingAddress())
@@ -362,7 +483,7 @@ func (this *Server) Loop() (bool, error) {
 }
 
 func (this *Server) AfterLoop() {
-	zlog.Debugln("SVR:", this.id, "shutdown")
+	zlog.Debugln("SVR:", this.id, "stopping")
 }
 
 func (this *Server) CommandHandle(message *zsm.Message) (bool, error) {
@@ -378,3 +499,5 @@ func ServerNew(context *Context) (server *Server) {
 	server.Init(server)
 	return
 }
+
+// -----------------------------------------------------------------------------
