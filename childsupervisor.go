@@ -28,7 +28,6 @@ import (
 	"github.com/atlaslee/zlog"
 	"github.com/atlaslee/zsm"
 	"net"
-	"time"
 )
 
 // -----------------------------------------------------------------------------
@@ -38,9 +37,15 @@ const (
 )
 
 type ChildSupervisor struct {
-	zsm.Monitor
+	zsm.Worker
 	server   *Server
 	children map[*net.TCPConn]*Child
+}
+
+func (this *ChildSupervisor) createChild(conn *net.TCPConn) {
+	child := NewChild(this.server, conn)
+	child.Startup()
+	this.children[conn] = child
 }
 
 func (this *ChildSupervisor) CreateChild(conn *net.TCPConn) {
@@ -48,24 +53,30 @@ func (this *ChildSupervisor) CreateChild(conn *net.TCPConn) {
 }
 
 func (this *ChildSupervisor) PreLoop() (err error) {
-	zlog.Debugln(this, "Starting up.")
-	return
-}
-
-func (this *ChildSupervisor) Loop() (ok bool, err error) {
-	// 选择更合适的Child
-	<-time.After(100 * time.Millisecond)
+	zlog.Debugln("CLDSPVS:", this, "is starting up")
 	return
 }
 
 func (this *ChildSupervisor) AfterLoop() {
+	zlog.Debugln("CLDSPVS:", this, "is shutting down")
+	for conn, child := range this.children {
+		child.Shutdown()
+		conn.Close()
+	}
 }
 
 func (this *ChildSupervisor) CommandHandle(msg *zsm.Message) (bool, error) {
+	switch msg.Type {
+	case CLDSPVS_CMD_CREATECHILD:
+		conn, ok := msg.Data.(*net.TCPConn)
+		if ok {
+			this.createChild(conn)
+		}
+	}
 	return true, nil
 }
 
-func ChildSupervisorNew(server *Server) (cldspvs *ChildSupervisor) {
+func NewChildSupervisor(server *Server) (cldspvs *ChildSupervisor) {
 	cldspvs = &ChildSupervisor{
 		server: server}
 

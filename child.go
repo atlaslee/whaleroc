@@ -28,7 +28,6 @@ import (
 	"github.com/atlaslee/zlog"
 	"github.com/atlaslee/zsm"
 	"net"
-	"time"
 )
 
 // -----------------------------------------------------------------------------
@@ -37,32 +36,32 @@ import (
 // 负责广播数据给子节点
 // 同时也接收子节点请求
 type Child struct {
-	zsm.Monitor
+	zsm.Worker
 	server     *Server
 	conn       *net.TCPConn
 	remoteAddr *net.TCPAddr
 }
 
 func (this *Child) PreLoop() (err error) {
-	zlog.Debugln(this, "Starting up.")
-	return
-}
-
-func (this *Child) Loop() (ok bool, err error) {
-	<-time.After(100 * time.Millisecond)
+	zlog.Debugln("CLD:", this, "is starting up")
+	// 1. 握手
 	return
 }
 
 func (this *Child) AfterLoop() {
+	zlog.Debugln("CLD:", this, "is shutting down")
 }
 
 func (this *Child) CommandHandle(msg *zsm.Message) (bool, error) {
 	return true, nil
 }
 
-func ChildNew(server *Server) (cld *Child) {
+func NewChild(server *Server, conn *net.TCPConn) (cld *Child) {
+	remoteAddr, _ := conn.RemoteAddr().(*net.TCPAddr)
 	cld = &Child{
-		server: server}
+		server:     server,
+		conn:       conn,
+		remoteAddr: remoteAddr}
 
 	cld.Init(cld)
 	return

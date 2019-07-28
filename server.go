@@ -94,9 +94,9 @@ func (this *Server) Parent() (parent *Parent) {
 }
 
 func (this *Server) PreLoop() (err error) {
-	zlog.Debugln("SVR:", this.IdString(), "starting")
+	zlog.Debugln("SVR:", this.IdString(), "is starting up")
+	zlog.Traceln("SVR:", this.IdString(), "is binding address:", this.context.BindingAddress().String())
 
-	zlog.Traceln("SVR:", this.IdString(), "binding address:", this.context.BindingAddress().String())
 	this.listener, err = net.ListenTCP("tcp", this.context.BindingAddress())
 	if err != nil {
 		zlog.Fatalln("SVR:", this.IdString(), "failed:", err)
@@ -104,17 +104,19 @@ func (this *Server) PreLoop() (err error) {
 	}
 
 	this.parentSupervisor = ParentSupervisorNew(this)
-	this.parentSupervisor.Run()
+	this.parentSupervisor.Startup()
 
 	zsm.WaitForStartupTimeout(this.parentSupervisor, 5*time.Second)
 
-	this.childSupervisor = ChildSupervisorNew(this)
-	this.childSupervisor.Run()
+	this.childSupervisor = NewChildSupervisor(this)
+	this.childSupervisor.Startup()
 	return
 }
 
 func (this *Server) AfterLoop() {
-	zlog.Debugln("SVR:", this.IdString(), "stopping")
+	zlog.Debugln("SVR:", this.IdString(), "is shutting down")
+	this.parentSupervisor.Shutdown()
+	this.childSupervisor.Shutdown()
 }
 
 func (this *Server) CommandHandle(message *zsm.Message) (bool, error) {
