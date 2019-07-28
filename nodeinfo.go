@@ -24,8 +24,14 @@ SOFTWARE.
 
 package dmt
 
+import (
+	"unsafe"
+)
+
 const (
-	PROTO_NODEINFO = "NDIF"
+	PROTO_NODEINFO        = "NDIF"
+	SIZEOF_NODEINFO_PROTO = len(PROTO_NODEINFO)
+	SIZEOF_NODEINFO       = SIZEOF_NODEINFO_PROTO + SIZEOF_VERSION + SIZEOF_ADDRESS + SIZEOF_HASH + 8*3
 )
 
 // 节点信息接口
@@ -49,11 +55,25 @@ type NodeInfoI interface {
 // 0_1为版本号。发布过的结构不得改变,只能发新结构
 // 发布过的属性不得修改，只能新增
 type NodeInfo_0_1 struct {
+	proto          [SIZEOF_BLOCK_PROTO]byte
+	version        Version
 	address        [SIZEOF_ADDRESS]byte
 	godHash        [SIZEOF_HASH]byte
 	startupTime    uint64
 	currentHeight  uint64
 	lastUpdateTime uint64
+}
+
+func (this *NodeInfo_0_1) Proto() string {
+	return string(this.proto[:])
+}
+
+func (this *NodeInfo_0_1) SetProto(proto string) {
+	copy(this.proto[:], []byte(proto))
+}
+
+func (this *NodeInfo_0_1) Version() *Version {
+	return &this.version
 }
 
 func (this *NodeInfo_0_1) Address() string {
@@ -74,4 +94,16 @@ func (this *NodeInfo_0_1) CurrentHeight() uint64 {
 
 func (this *NodeInfo_0_1) LastUpdateTime() uint64 {
 	return this.lastUpdateTime
+}
+
+func (this *NodeInfo_0_1) Bytes() (b []byte) {
+	return (*(*[SIZEOF_NODEINFO]byte)(unsafe.Pointer(this)))[:]
+}
+
+func (this *NodeInfo_0_1) SetBytes(bytes []byte) (info NodeInfoI, err error) {
+	copy((*(*[SIZEOF_NODEINFO]byte)(unsafe.Pointer(this)))[:], bytes)
+	if this.Proto() != PROTO_NODEINFO {
+		return nil, ERR_UNKNOWN_PROTO
+	}
+	return this, err
 }
