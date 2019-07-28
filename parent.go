@@ -46,10 +46,14 @@ func (this *Parent) RemoteAddr() *net.TCPAddr {
 
 func (this *Parent) PreLoop() (err error) {
 	zlog.Debugln(this, "Starting up.")
+	// 1. 握手
 	return
 }
 
 func (this *Parent) Loop() (ok bool, err error) {
+	//
+	// 4. 维护runtime
+	// 5. 在root角色下签名和发块
 	<-time.After(100 * time.Millisecond)
 	return
 }

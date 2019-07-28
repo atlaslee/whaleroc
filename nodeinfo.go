@@ -34,6 +34,11 @@ const (
 	SIZEOF_NODEINFO       = SIZEOF_NODEINFO_PROTO + SIZEOF_VERSION + SIZEOF_ADDRESS + SIZEOF_HASH + 8*3
 )
 
+var (
+	PROTO_NODEINFO_BYTES = [SIZEOF_NODEINFO_PROTO]byte{78, 68, 73, 70}
+	VERSIONOF_NODEINFO   = NewVersion4(0, 1, 0, 0)
+)
+
 // 节点信息接口
 // 该接口不得修改，以便向前兼容
 //
@@ -55,8 +60,8 @@ type NodeInfoI interface {
 // 0_1为版本号。发布过的结构不得改变,只能发新结构
 // 发布过的属性不得修改，只能新增
 type NodeInfo_0_1 struct {
-	proto          [SIZEOF_BLOCK_PROTO]byte
-	version        Version
+	proto          [SIZEOF_NODEINFO_PROTO]byte
+	version        *Version
 	address        [SIZEOF_ADDRESS]byte
 	godHash        [SIZEOF_HASH]byte
 	startupTime    uint64
@@ -73,7 +78,7 @@ func (this *NodeInfo_0_1) SetProto(proto string) {
 }
 
 func (this *NodeInfo_0_1) Version() *Version {
-	return &this.version
+	return this.version
 }
 
 func (this *NodeInfo_0_1) Address() string {
@@ -106,4 +111,15 @@ func (this *NodeInfo_0_1) SetBytes(bytes []byte) (info NodeInfoI, err error) {
 		return nil, ERR_UNKNOWN_PROTO
 	}
 	return this, err
+}
+
+func NewNodeInfo(s *Server) (info NodeInfoI) {
+	return &NodeInfo_0_1{
+		proto:          PROTO_NODEINFO_BYTES,
+		version:        VERSIONOF_NODEINFO,
+		address:        s.Address(),
+		godHash:        s.Runtime().GodHash,
+		startupTime:    s.Runtime().StartupTime,
+		currentHeight:  s.Runtime().Height,
+		lastUpdateTime: s.Runtime().LastUpdateTime}
 }
