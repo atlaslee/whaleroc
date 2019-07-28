@@ -37,18 +37,21 @@ const (
 	SIZEOF_BLOCK       = SIZEOF_BLOCK_PROTO + SIZEOF_VERSION + SIZEOF_HASH + 8 + SIZEOF_HASH + 8 + 1 + SIZEOF_SIGNATURE + 2
 )
 
+var (
+	PROTO_BLOCK_BYTES = [SIZEOF_BLOCK_PROTO]byte{66, 76, 75}
+)
+
 // 区块接口
 // 该接口不得修改，以便向前兼容
 //
 // 用于打包条目以便于传播
 type BlockI interface {
-	Proto() string // 用于反序列化校验
-	SetProto(string)
+	Proto() string     // 用于反序列化校验
 	Version() *Version // 用于指定处理的版本
 	Id() []byte
 	IdString() string
 	Height() uint64
-	GodHash() []byte
+	GodHash() [SIZEOF_HASH]byte
 	GodHashString() string
 	Timestamp() uint64
 	EncryptType() byte
@@ -81,10 +84,6 @@ func (this *Block_0_1) Proto() string {
 	return string(this.proto[:])
 }
 
-func (this *Block_0_1) SetProto(proto string) {
-	copy(this.proto[:], []byte(proto))
-}
-
 func (this *Block_0_1) Version() *Version {
 	return &this.version
 }
@@ -101,8 +100,8 @@ func (this *Block_0_1) Height() uint64 {
 	return this.height
 }
 
-func (this *Block_0_1) GodHash() []byte {
-	return this.godHash[:]
+func (this *Block_0_1) GodHash() [SIZEOF_HASH]byte {
+	return this.godHash
 }
 
 func (this *Block_0_1) GodHashString() string {
@@ -147,7 +146,11 @@ func (this *Block_0_1) Bytes() (b []byte) {
 }
 
 func (this *Block_0_1) SetBytes(bytes []byte) (block BlockI, err error) {
-	copy((*(*[SIZEOF_BLOCK]byte)(unsafe.Pointer(this)))[:], bytes)
+	n := copy((*(*[SIZEOF_BLOCK]byte)(unsafe.Pointer(this)))[:], bytes)
+	if n != SIZEOF_BLOCK {
+		return nil, ERR_BUFFER_BROKEN
+	}
+
 	if this.Proto() != PROTO_BLOCK {
 		return nil, ERR_UNKNOWN_PROTO
 	}
@@ -182,24 +185,23 @@ func GenBlockId(last BlockI) (res [SIZEOF_HASH]byte) {
 
 func GenGodBlock(god *Account) (block BlockI) {
 	block = NewBlock()
-	block.SetProto(PROTO_BLOCK)
-	block.Version().SetString(DMT_VER)
 	block.Sign(god)
 	return
 }
 
 func NewBlock() (block BlockI) {
-	block = &Block_0_1{timestamp: uint64(time.Now().UnixNano())}
-	block.SetProto(PROTO_BLOCK)
-	block.Version().SetString(DMT_VER)
+	block = &Block_0_1{
+		proto:     PROTO_BLOCK_BYTES,
+		version:   *DMT_VERSION,
+		timestamp: uint64(time.Now().UnixNano())}
 	return
 }
 
 func NewBlock1(last BlockI) (block BlockI) {
 	block = &Block_0_1{
 		id:        GenBlockId(last),
+		proto:     PROTO_BLOCK_BYTES,
+		version:   *DMT_VERSION,
 		timestamp: uint64(time.Now().UnixNano())}
-	block.SetProto(PROTO_BLOCK)
-	block.Version().SetString(DMT_VER)
 	return
 }

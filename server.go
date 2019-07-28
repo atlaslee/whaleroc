@@ -36,7 +36,7 @@ import (
 
 type Server struct {
 	zsm.Worker
-	address          [SIZEOF_ADDRESS]byte
+	id               [SIZEOF_ADDRESS]byte
 	context          *Context
 	runtime          *Runtime
 	listener         *net.TCPListener
@@ -77,12 +77,12 @@ func (this *Server) Runtime() *Runtime {
 	return this.runtime
 }
 
-func (this *Server) Address() [SIZEOF_ADDRESS]byte {
-	return this.address
+func (this *Server) Id() [SIZEOF_ADDRESS]byte {
+	return this.id
 }
 
-func (this *Server) AddressString() string {
-	return base64.URLEncoding.EncodeToString(this.address[:])
+func (this *Server) IdString() string {
+	return base64.URLEncoding.EncodeToString(this.id[:])
 }
 
 func (this *Server) Listener() *net.TCPListener {
@@ -94,12 +94,12 @@ func (this *Server) Parent() (parent *Parent) {
 }
 
 func (this *Server) PreLoop() (err error) {
-	zlog.Debugln("SVR:", this.AddressString(), "starting")
+	zlog.Debugln("SVR:", this.IdString(), "starting")
 
-	zlog.Traceln("SVR:", this.AddressString(), "binding address:", this.context.BindingAddress().String())
+	zlog.Traceln("SVR:", this.IdString(), "binding address:", this.context.BindingAddress().String())
 	this.listener, err = net.ListenTCP("tcp", this.context.BindingAddress())
 	if err != nil {
-		zlog.Fatalln("SVR:", this.AddressString(), "failed:", err)
+		zlog.Fatalln("SVR:", this.IdString(), "failed:", err)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (this *Server) PreLoop() (err error) {
 }
 
 func (this *Server) AfterLoop() {
-	zlog.Debugln("SVR:", this.AddressString(), "stopping")
+	zlog.Debugln("SVR:", this.IdString(), "stopping")
 }
 
 func (this *Server) CommandHandle(message *zsm.Message) (bool, error) {
@@ -123,7 +123,16 @@ func (this *Server) CommandHandle(message *zsm.Message) (bool, error) {
 
 func ServerNew(context *Context) (server *Server) {
 	server = &Server{
-		context:  context,
+		context: context,
+		id:      context.Account().Address(),
+		runtime: &Runtime{
+			Version:        DMT_VERSION,
+			Address:        context.Account().Address(),
+			GodHash:        context.GodBlock().GodHash(),
+			StartupTime:    uint64(time.Now().UnixNano()),
+			Height:         0,
+			LastUpdateTime: context.GodBlock().Timestamp(),
+			Blocks:         []BlockI{context.GodBlock()}},
 		backups:  make(map[*net.TCPAddr]*Parent),
 		children: make(map[*net.TCPConn]*Child)}
 

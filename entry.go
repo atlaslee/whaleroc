@@ -34,13 +34,16 @@ const (
 	SIZEOF_ENTRY       = SIZEOF_ENTRY_PROTO + SIZEOF_VERSION + SIZEOF_HASH + SIZEOF_ADDRESS + 8 + SIZEOF_HASH + 4 + 1 + SIZEOF_SIGNATURE
 )
 
+var (
+	PROTO_ENTRY_BYTES = [SIZEOF_ENTRY_PROTO]byte{78, 84, 82}
+)
+
 // 条目接口
 // 该接口不得修改，以便向前兼容
 //
 // 用于保存传播内容
 type EntryI interface {
-	Proto() string // 用于反序列化校验
-	SetProto(string)
+	Proto() string     // 用于反序列化校验
 	Version() *Version // 用于指定处理的版本
 	Id() [SIZEOF_HASH]byte
 	From() [SIZEOF_ADDRESS]byte
@@ -72,10 +75,6 @@ type Entry_0_1 struct {
 
 func (this *Entry_0_1) Proto() string {
 	return string(this.proto[:])
-}
-
-func (this *Entry_0_1) SetProto(proto string) {
-	copy(this.proto[:], []byte(proto))
 }
 
 func (this *Entry_0_1) Version() *Version {
@@ -125,16 +124,26 @@ func (this *Entry_0_1) Bytes() (b []byte) {
 }
 
 func (this *Entry_0_1) SetBytes(b []byte) (entry EntryI, err error) {
-	copy((*(*[SIZEOF_ENTRY]byte)(unsafe.Pointer(this)))[:], b)
+	n := copy((*(*[SIZEOF_ENTRY]byte)(unsafe.Pointer(this)))[:], b)
+	if n != SIZEOF_ENTRY {
+		return nil, ERR_BUFFER_BROKEN
+	}
+
 	if this.Proto() != PROTO_ENTRY {
 		return nil, ERR_UNKNOWN_PROTO
 	}
 
 	this.data = make([]byte, this.size)
-	copy(this.data, b[SIZEOF_ENTRY:])
+	n = copy(this.data, b[SIZEOF_ENTRY:])
+	if n != int(this.size) {
+		return nil, ERR_BUFFER_BROKEN
+	}
+
 	return this, err
 }
 
 func NewEntry() EntryI {
-	return &Entry_0_1{}
+	return &Entry_0_1{
+		proto:   PROTO_ENTRY_BYTES,
+		version: *DMT_VERSION}
 }

@@ -30,5 +30,5 @@ import (
 
 func TestAccountGen(t *testing.T) {
 	account := GenAccount()
-	println(account.Address(), account.PrivateKeyString())
+	println(account.AddressString(), account.PrivateKeyString())
 }

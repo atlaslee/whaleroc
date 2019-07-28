@@ -77,7 +77,7 @@ func ContextNew(
 	}
 
 	ctx = &Context{
-		version:        NewVersion().SetString(DMT_VER),
+		version:        DMT_VERSION,
 		account:        account,
 		godBlock:       godBlock,
 		bindingAddress: tcpAddress,

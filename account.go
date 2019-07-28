@@ -88,7 +88,11 @@ func ripemd160Encode(b []byte) []byte {
 
 }
 
-func (this *Account) Address() string {
+func (this *Account) Address() [SIZEOF_ADDRESS]byte {
+	return this.address
+}
+
+func (this *Account) AddressString() string {
 	return b58Encode(this.address[:])
 }
 

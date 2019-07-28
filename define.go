@@ -29,7 +29,7 @@ import (
 )
 
 const ( // 版本号
-	DMT_VER = "v0.1.0.0"
+	DMT_VER_STR = "v0.1.0.0"
 )
 
 const ( // 算法参数
@@ -62,9 +62,12 @@ var ( // 运行时参数
 		"127.0.0.1:8007",
 		"127.0.0.1:8008",
 		"127.0.0.1:8009"}
+
+	DMT_VERSION = NewVersion().SetString(DMT_VER_STR)
 )
 
 var (
 	ERR_UNKNOWN_PROTO   = errors.New("Unknown proto founded")
 	ERR_VERSION_TOO_OLD = errors.New("Current version is too old")
+	ERR_BUFFER_BROKEN   = errors.New("Buffer is broken")
 )

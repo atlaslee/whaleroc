@@ -36,7 +36,6 @@ const (
 
 var (
 	PROTO_NODEINFO_BYTES = [SIZEOF_NODEINFO_PROTO]byte{78, 68, 73, 70}
-	VERSIONOF_NODEINFO   = NewVersion4(0, 1, 0, 0)
 )
 
 // 节点信息接口
@@ -44,8 +43,7 @@ var (
 //
 // 用于握手，通讯双方判断连接是否成立
 type NodeInfoI interface {
-	Proto() string // 用于反序列化校验
-	SetProto(string)
+	Proto() string     // 用于反序列化校验
 	Version() *Version // 用于指定处理的版本
 	Address() string
 	GodHash() string
@@ -61,7 +59,7 @@ type NodeInfoI interface {
 // 发布过的属性不得修改，只能新增
 type NodeInfo_0_1 struct {
 	proto          [SIZEOF_NODEINFO_PROTO]byte
-	version        *Version
+	version        Version
 	address        [SIZEOF_ADDRESS]byte
 	godHash        [SIZEOF_HASH]byte
 	startupTime    uint64
@@ -73,12 +71,8 @@ func (this *NodeInfo_0_1) Proto() string {
 	return string(this.proto[:])
 }
 
-func (this *NodeInfo_0_1) SetProto(proto string) {
-	copy(this.proto[:], []byte(proto))
-}
-
 func (this *NodeInfo_0_1) Version() *Version {
-	return this.version
+	return &this.version
 }
 
 func (this *NodeInfo_0_1) Address() string {
@@ -106,7 +100,11 @@ func (this *NodeInfo_0_1) Bytes() (b []byte) {
 }
 
 func (this *NodeInfo_0_1) SetBytes(bytes []byte) (info NodeInfoI, err error) {
-	copy((*(*[SIZEOF_NODEINFO]byte)(unsafe.Pointer(this)))[:], bytes)
+	n := copy((*(*[SIZEOF_NODEINFO]byte)(unsafe.Pointer(this)))[:], bytes)
+	if n != SIZEOF_NODEINFO {
+		return nil, ERR_BUFFER_BROKEN
+	}
+
 	if this.Proto() != PROTO_NODEINFO {
 		return nil, ERR_UNKNOWN_PROTO
 	}
@@ -116,8 +114,8 @@ func (this *NodeInfo_0_1) SetBytes(bytes []byte) (info NodeInfoI, err error) {
 func NewNodeInfo(s *Server) (info NodeInfoI) {
 	return &NodeInfo_0_1{
 		proto:          PROTO_NODEINFO_BYTES,
-		version:        VERSIONOF_NODEINFO,
-		address:        s.Address(),
+		version:        *DMT_VERSION,
+		address:        s.Id(),
 		godHash:        s.Runtime().GodHash,
 		startupTime:    s.Runtime().StartupTime,
 		currentHeight:  s.Runtime().Height,
