@@ -25,6 +25,7 @@ SOFTWARE.
 package dmt
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"time"
 	"unsafe"
@@ -44,10 +45,10 @@ type BlockI interface {
 	Proto() string // 用于反序列化校验
 	SetProto(string)
 	Version() *Version // 用于指定处理的版本
-	Id() [SIZEOF_HASH]byte
+	Id() []byte
 	IdString() string
 	Height() uint64
-	GodHash() [SIZEOF_HASH]byte
+	GodHash() []byte
 	GodHashString() string
 	Timestamp() uint64
 	EncryptType() byte
@@ -88,8 +89,8 @@ func (this *Block_0_1) Version() *Version {
 	return &this.version
 }
 
-func (this *Block_0_1) Id() [SIZEOF_HASH]byte {
-	return this.id
+func (this *Block_0_1) Id() []byte {
+	return this.id[:]
 }
 
 func (this *Block_0_1) IdString() string {
@@ -100,8 +101,8 @@ func (this *Block_0_1) Height() uint64 {
 	return this.height
 }
 
-func (this *Block_0_1) GodHash() [SIZEOF_HASH]byte {
-	return this.godHash
+func (this *Block_0_1) GodHash() []byte {
+	return this.godHash[:]
 }
 
 func (this *Block_0_1) GodHashString() string {
@@ -165,10 +166,40 @@ func (this *Block_0_1) SetBytes(bytes []byte) (block BlockI, err error) {
 	return this, err
 }
 
+func GenBlockId(last BlockI) (res [SIZEOF_HASH]byte) {
+	data := make([]byte, SIZEOF_HASH+SIZEOF_SIGNATURE)
+	copy(data, last.Id())
+	copy(data[SIZEOF_HASH:], last.Signature())
+
+	hash := sha256.New()
+	hash.Reset()
+	hash.Write(data)
+
+	data = hash.Sum(nil)
+	copy(res[:], data)
+	return
+}
+
 func GenGodBlock(god *Account) (block BlockI) {
-	block = &Block_0_1{timestamp: uint64(time.Now().UnixNano())}
+	block = NewBlock()
 	block.SetProto(PROTO_BLOCK)
 	block.Version().SetString(DMT_VER)
 	block.Sign(god)
+	return
+}
+
+func NewBlock() (block BlockI) {
+	block = &Block_0_1{timestamp: uint64(time.Now().UnixNano())}
+	block.SetProto(PROTO_BLOCK)
+	block.Version().SetString(DMT_VER)
+	return
+}
+
+func NewBlock1(last BlockI) (block BlockI) {
+	block = &Block_0_1{
+		id:        GenBlockId(last),
+		timestamp: uint64(time.Now().UnixNano())}
+	block.SetProto(PROTO_BLOCK)
+	block.Version().SetString(DMT_VER)
 	return
 }
