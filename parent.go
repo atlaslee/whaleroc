@@ -1,5 +1,7 @@
-/* The MIT License (MIT)
-Copyright © 2018 by Atlas Lee(atlas@fpay.io)
+/*
+The MIT License (MIT)
+
+Copyright © 2019 Atlas Lee, 4859345@qq.com
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the “Software”),
@@ -25,28 +27,44 @@ package dmt
 import (
 	"github.com/atlaslee/zlog"
 	"github.com/atlaslee/zsm"
-	"testing"
+	"net"
 	"time"
 )
 
-func TestServer(t *testing.T) {
-	zlog.Traceln("TestServer")
+// -----------------------------------------------------------------------------
 
-	context1 := ContextNew("127.0.0.1:8000",
-		[]string{
-			/*"127.0.0.1:8000",
-			"127.0.0.1:8001",
-			"127.0.0.1:8002",
-			"127.0.0.1:8003",
-			"127.0.0.1:8004",*/
-			"127.0.0.1:8005",
-			"127.0.0.1:8006",
-			"127.0.0.1:8007",
-			"127.0.0.1:8008",
-			"127.0.0.1:8009"})
+type Parent struct {
+	zsm.Monitor
+	server     *Server
+	conn       *net.TCPConn
+	remoteAddr *net.TCPAddr
+}
 
-	server1 := ServerNew(context1)
-	server1.Startup()
-	zsm.WaitForStartupTimeout(server1, 5*time.Second)
-	server1.Shutdown()
+func (this *Parent) RemoteAddr() *net.TCPAddr {
+	return this.remoteAddr
+}
+
+func (this *Parent) PreLoop() (err error) {
+	zlog.Debugln(this, "Starting up.")
+	return
+}
+
+func (this *Parent) Loop() (ok bool, err error) {
+	<-time.After(100 * time.Millisecond)
+	return
+}
+
+func (this *Parent) AfterLoop() {
+}
+
+func (this *Parent) CommandHandle(msg *zsm.Message) (bool, error) {
+	return true, nil
+}
+
+func ParentNew(server *Server) (prt *Parent) {
+	prt = &Parent{
+		server: server}
+
+	prt.Init(prt)
+	return
 }

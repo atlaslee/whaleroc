@@ -3,5 +3,6 @@
 *.rdb
 dump*
 src/github.com/*
+src/golang.org/*
 pkg
 bin

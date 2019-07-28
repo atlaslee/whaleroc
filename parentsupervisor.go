@@ -1,0 +1,99 @@
+/*
+The MIT License (MIT)
+
+Copyright © 2019 Atlas Lee, 4859345@qq.com
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the “Software”),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
+
+package dmt
+
+import (
+	"github.com/atlaslee/zlog"
+	"github.com/atlaslee/zsm"
+	"net"
+	"time"
+)
+
+// -----------------------------------------------------------------------------
+
+const (
+	PRTSPVS_CMD_CREATEPARENT = 1
+)
+
+type ParentSupervisor struct {
+	zsm.Monitor
+	server  *Server
+	backups map[*net.TCPAddr]*Parent
+	parent  *Parent
+}
+
+func (this *ParentSupervisor) createParent(addr *net.TCPAddr) {
+	if this.server.Context().BindingAddress().String() == addr.String() {
+		return
+	}
+
+	if this.parent != nil && this.parent.RemoteAddr().String() == addr.String() {
+		return
+	}
+
+	for k, _ := range this.backups {
+		if k.String() == addr.String() {
+			return
+		}
+	}
+
+	parent := ParentNew(this.server)
+	this.backups[addr] = parent
+	go parent.Run()
+}
+
+func (this *ParentSupervisor) CreateParent(addr *net.TCPAddr) {
+	this.SendMsg3(PRTSPVS_CMD_CREATEPARENT, this, addr)
+}
+
+func (this *ParentSupervisor) PreLoop() (err error) {
+	zlog.Debugln("PS:", this, "starting")
+	return
+}
+
+func (this *ParentSupervisor) Loop() (ok bool, err error) {
+	// 1. 补充backups
+	// 2. 发现更合适的parent
+	// 3. 清理无效backups
+	<-time.After(100 * time.Millisecond)
+	return
+}
+
+func (this *ParentSupervisor) AfterLoop() {
+	zlog.Debugln("PS:", this, "stopping")
+}
+
+func (this *ParentSupervisor) CommandHandle(msg *zsm.Message) (bool, error) {
+	return true, nil
+}
+
+func ParentSupervisorNew(server *Server) (prtspvs *ParentSupervisor) {
+	prtspvs = &ParentSupervisor{
+		server:  server,
+		backups: server.backups,
+		parent:  server.parent}
+	prtspvs.Init(prtspvs)
+	return
+}
