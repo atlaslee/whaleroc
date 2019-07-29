@@ -1,6 +1,15 @@
-# dmt_golang
-DMT 基于GO语言的动态多叉树模型
+# WhaleRoc
 
-动态多叉树是一种网络拓扑结构。它把网络中的节点通过多叉树的方式连接起来，通过权重的方式进行动态再平衡。
+WhaleRoc is a **decentralized communication framework**. 
+All WhaleRoc nodes are **automatically organized** to build a network topologic.
+Messages coming from any node will automatically find the best path to broadcast to the whole network.
 
-通过动态多叉树结构，消息从任意节点进入网络后，可以找到最快的路径在全网内广播。
+Unlike other de-centralization technologies, **WhaleRoc is open to more nodes**.
+The more nodes joined, the more powerful whaleroc will be.
+
+WhaleRoc can be used as a decentralized underlying communication service,
+can be used as a blockchain system,
+and also can be used as a decentralized cloud computing services platform.
+Even more, in the future, opensource authors can bind their projects to WhaleRoc,
+run as decentralized services in the global WhaleRoc network computer,
+to serve clients all over the world.
