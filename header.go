@@ -25,31 +25,26 @@ SOFTWARE.
 package dmt
 
 import (
+	"net"
 	"unsafe"
 )
 
 const (
-	SIZEOF_PROTO  = 8
 	SIZEOF_HEADER = SIZEOF_PROTO + SIZEOF_VERSION + 4
-	MAINPROTO     = "WRCP" // WhaleRoc Chain Protocol
-)
-
-var (
-	PROTOVER = NewVersion4(0, 1, 0, 0)
 )
 
 type Header struct {
-	name    [SIZEOF_PROTO]byte
+	proto   [SIZEOF_PROTO]byte
 	version Version
 	size    uint32
 }
 
-func (this *Header) Name() string {
-	return string(this.name[:])
+func (this *Header) Proto() string {
+	return string(this.proto[:])
 }
 
-func (this *Header) SetName(name string) {
-	copy(this.name[:], []byte(name))
+func (this *Header) SetProto(name string) {
+	copy(this.proto[:], []byte(name))
 }
 
 func (this *Header) Version() *Version {
@@ -92,14 +87,49 @@ func NewHeader2(proto string, bytes []byte) *Header {
 func NewHeader3(proto string, ver *Version, bytes []byte) (header *Header) {
 	header = NewHeader()
 
-	copy(header.name[:], []byte(MAINPROTO+"/"+proto))
+	copy(header.proto[:], []byte(DMT_PROTO+"/"+proto))
 
 	if ver != nil {
 		header.Version().SetBytes(ver.Bytes())
 	} else {
-		header.Version().SetBytes(PROTOVER.Bytes())
+		header.Version().SetBytes(DMT_VERSION.Bytes())
 	}
 
 	header.size = uint32(len(bytes))
+	return
+}
+
+func ReadHeader(conn *net.TCPConn, proto string) (header *Header, err error) {
+	h := [SIZEOF_HEADER]byte{}
+
+	n, err := conn.Read(h[:])
+
+	if err != nil {
+		return
+	}
+
+	if n != SIZEOF_HEADER {
+		return nil, ERR_BUFFER_BROKEN
+	}
+
+	header = (*Header)(unsafe.Pointer(&h))
+	if header.Proto() != proto {
+		return nil, ERR_UNKNOWN_PROTO
+	}
+
+	return
+}
+
+func WriteHeader(conn *net.TCPConn, proto string, ver *Version, bytes []byte) (err error) {
+	header := NewHeader3(proto, ver, bytes)
+	n, err := conn.Write(header.Bytes())
+	if err != nil {
+		return
+	}
+
+	if n != SIZEOF_HEADER {
+		return ERR_BUFFER_BROKEN
+	}
+
 	return
 }

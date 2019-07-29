@@ -25,68 +25,44 @@ DEALINGS IN THE SOFTWARE.
 package dmt
 
 import (
-	"github.com/atlaslee/zlog"
-	"github.com/atlaslee/zsm"
 	"net"
-	"time"
 )
 
-// -----------------------------------------------------------------------------
-
-type Parent struct {
-	zsm.Monitor
-	server     *Server
-	conn       *net.TCPConn
-	remoteAddr *net.TCPAddr
-	info       NodeInfoI
-}
-
-func (this *Parent) RemoteAddr() *net.TCPAddr {
-	return this.remoteAddr
-}
-
-func (this *Parent) PreLoop() (err error) {
-	zlog.Debugln(this, "Starting up.")
-
-	// handshake1: receive serverInfo
-	bytes, err := ReadBytes(this.conn, PROTO_NODEINFO)
+func ReadBytes(conn *net.TCPConn, proto string) (bytes []byte, err error) {
+	header, err := ReadHeader(conn, proto)
 	if err != nil {
 		return
 	}
 
-	this.info = NewNodeInfo()
-	this.info.SetBytes(bytes)
+	bytes = make([]byte, header.Size())
+	n, err := conn.Read(bytes)
 
-	// handshake2: send clientInfo
-	err = WriteBytes(this.conn, PROTO_NODEINFO, VER_NODEINFO, NewNodeInfo1(this.server).Bytes())
 	if err != nil {
 		return
+	}
+
+	if n != header.Size() {
+		return nil, ERR_BUFFER_BROKEN
 	}
 
 	return
 }
 
-func (this *Parent) Loop() (ok bool, err error) {
+func WriteBytes(conn *net.TCPConn, proto string, ver *Version, bytes []byte) (err error) {
+	err = WriteHeader(conn, proto, ver, bytes)
 
-	//
-	// 4. 维护runtime
-	// 5. 在root角色下签名和发块
-	<-time.After(100 * time.Millisecond)
-	return
-}
+	if err != nil {
+		return
+	}
 
-func (this *Parent) AfterLoop() {
-	this.conn.Close()
-}
+	n, err := conn.Write(bytes)
+	if err != nil {
+		return
+	}
 
-func (this *Parent) CommandHandle(msg *zsm.Message) (bool, error) {
-	return true, nil
-}
+	if n != len(bytes) {
+		return ERR_BUFFER_BROKEN
+	}
 
-func ParentNew(server *Server) (prt *Parent) {
-	prt = &Parent{
-		server: server}
-
-	prt.Init(prt)
 	return
 }

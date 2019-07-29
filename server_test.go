@@ -39,7 +39,7 @@ func TestServer(t *testing.T) {
 		godBlock,
 		nil)
 
-	server1 := ServerNew(context1)
+	server1 := NewServer(context1)
 	server1.Startup()
 	zsm.WaitForStartupTimeout(server1, 5*time.Second)
 	server1.Shutdown()

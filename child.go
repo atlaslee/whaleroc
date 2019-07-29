@@ -40,16 +40,32 @@ type Child struct {
 	server     *Server
 	conn       *net.TCPConn
 	remoteAddr *net.TCPAddr
+	info       NodeInfoI
 }
 
 func (this *Child) PreLoop() (err error) {
 	zlog.Debugln("CLD:", this, "is starting up")
-	// 1. 握手
+
+	// handshake1: send serverInfo
+	err = WriteBytes(this.conn, PROTO_NODEINFO, VER_NODEINFO, NewNodeInfo1(this.server).Bytes())
+	if err != nil {
+		return
+	}
+
+	// handshake2: receive clientinfo
+	bytes, err := ReadBytes(this.conn, PROTO_NODEINFO)
+	if err != nil {
+		return
+	}
+
+	this.info = NewNodeInfo1(this.server)
+	this.info.SetBytes(bytes)
 	return
 }
 
 func (this *Child) AfterLoop() {
 	zlog.Debugln("CLD:", this, "is shutting down")
+	this.conn.Close()
 }
 
 func (this *Child) CommandHandle(msg *zsm.Message) (bool, error) {

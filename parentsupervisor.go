@@ -68,32 +68,27 @@ func (this *ParentSupervisor) CreateParent(raddr *net.TCPAddr) {
 
 func (this *ParentSupervisor) PreLoop() (err error) {
 	zlog.Debugln("PRTSPVS:", this, "is starting")
+
+	workers := make([]zsm.WorkerI, 0)
 	for _, raddr := range this.server.Context().DefaultNodes() {
 		if raddr == nil {
 			continue
 		}
 		parent := this.createParent(raddr)
-		zsm.WaitForStartupTimeout(parent, 1*time.Second)
-
-		if parent.State() == zsm.STA_RUNNING {
-			// v0.1～v0.2只找到1个parent即可
-			this.backups[raddr] = parent
-			this.parent = parent
-			return
-		}
+		this.backups[raddr] = parent
+		workers = append(workers, parent)
 	}
 
 	for _, raddr := range this.server.Context().StartupNodes() {
-		parent := this.createParent(raddr)
-		zsm.WaitForStartupTimeout(parent, 1*time.Second)
-
-		if parent.State() == zsm.STA_RUNNING {
-			// v0.1～v0.2只找到1个parent即可
-			this.backups[raddr] = parent
-			this.parent = parent
-			return
+		if raddr == nil {
+			continue
 		}
+		parent := this.createParent(raddr)
+		this.backups[raddr] = parent
+		workers = append(workers, parent)
 	}
+
+	zsm.WaitForStartupAllTimeout(workers, 1*time.Second)
 	return
 }
 

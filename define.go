@@ -30,6 +30,7 @@ import (
 
 const ( // 版本号
 	DMT_VER_STR = "v0.1.0.0"
+	DMT_PROTO   = "WRCP" // WhaleRoc Chain Protocol
 )
 
 const ( // 算法参数
@@ -44,6 +45,8 @@ const ( // SIZE参数
 	SIZEOF_PRIVATEKEY = 32
 	SIZEOF_PUBLICKEY  = 2 * SIZEOF_BIGINT
 	SIZEOF_SIGNATURE  = SIZEOF_PUBLICKEY + 2*SIZEOF_BIGINT
+	SIZEOF_PROTO      = 8
+	SIZEOF_DMT_PROTO  = len(DMT_PROTO)
 )
 
 const (
@@ -63,7 +66,8 @@ var ( // 运行时参数
 		"127.0.0.1:8008",
 		"127.0.0.1:8009"}
 
-	DMT_VERSION = NewVersion().SetString(DMT_VER_STR)
+	DMT_VERSION     = NewVersion().SetString(DMT_VER_STR)
+	DMT_PROTO_BYTES = [SIZEOF_DMT_PROTO]byte{87, 82, 67, 80}
 )
 
 var (

@@ -29,12 +29,14 @@ import (
 )
 
 const (
-	PROTO_NODEINFO        = "NDIF"
+	PROTO_NODEINFO        = "WRCP/NDIF"
+	VER_NODEINFO_STR      = "v0.1.0.0"
 	SIZEOF_NODEINFO_PROTO = len(PROTO_NODEINFO)
 	SIZEOF_NODEINFO       = SIZEOF_NODEINFO_PROTO + SIZEOF_VERSION + SIZEOF_ADDRESS + SIZEOF_HASH + 8*3
 )
 
 var (
+	VER_NODEINFO         = NewVersion().SetString(VER_NODEINFO_STR)
 	PROTO_NODEINFO_BYTES = [SIZEOF_NODEINFO_PROTO]byte{78, 68, 73, 70}
 )
 
@@ -111,7 +113,11 @@ func (this *NodeInfo_0_1) SetBytes(bytes []byte) (info NodeInfoI, err error) {
 	return this, err
 }
 
-func NewNodeInfo(s *Server) (info NodeInfoI) {
+func NewNodeInfo() (info NodeInfoI) {
+	return &NodeInfo_0_1{}
+}
+
+func NewNodeInfo1(s *Server) (info NodeInfoI) {
 	return &NodeInfo_0_1{
 		proto:          PROTO_NODEINFO_BYTES,
 		version:        *DMT_VERSION,

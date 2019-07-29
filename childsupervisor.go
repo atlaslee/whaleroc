@@ -59,9 +59,8 @@ func (this *ChildSupervisor) PreLoop() (err error) {
 
 func (this *ChildSupervisor) AfterLoop() {
 	zlog.Debugln("CLDSPVS:", this, "is shutting down")
-	for conn, child := range this.children {
+	for _, child := range this.children {
 		child.Shutdown()
-		conn.Close()
 	}
 }
 

@@ -123,7 +123,7 @@ func (this *Server) CommandHandle(message *zsm.Message) (bool, error) {
 	return true, nil
 }
 
-func ServerNew(context *Context) (server *Server) {
+func NewServer(context *Context) (server *Server) {
 	server = &Server{
 		context: context,
 		id:      context.Account().Address(),
