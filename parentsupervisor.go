@@ -38,51 +38,72 @@ const (
 )
 
 type ParentSupervisor struct {
-	zsm.Monitor
+	zsm.Worker
 	server  *Server
 	backups map[*net.TCPAddr]*Parent
 	parent  *Parent
 }
 
-func (this *ParentSupervisor) createParent(addr *net.TCPAddr) {
-	if this.server.Context().BindingAddress().String() == addr.String() {
-		return
+func (this *ParentSupervisor) createParent(raddr *net.TCPAddr) *Parent {
+	if this.server.Context().BindingAddress().String() == raddr.String() {
+		return nil
 	}
 
-	if this.parent != nil && this.parent.RemoteAddr().String() == addr.String() {
-		return
+	if this.parent != nil && this.parent.RemoteAddr().String() == raddr.String() {
+		return nil
 	}
 
 	for k, _ := range this.backups {
-		if k.String() == addr.String() {
+		if k.String() == raddr.String() {
+			return nil
+		}
+	}
+
+	return ParentNew(this.server)
+}
+
+func (this *ParentSupervisor) CreateParent(raddr *net.TCPAddr) {
+	this.SendMsg3(PRTSPVS_CMD_CREATEPARENT, this, raddr)
+}
+
+func (this *ParentSupervisor) PreLoop() (err error) {
+	zlog.Debugln("PRTSPVS:", this, "is starting")
+	for _, raddr := range this.server.Context().DefaultNodes() {
+		if raddr == nil {
+			continue
+		}
+		parent := this.createParent(raddr)
+		zsm.WaitForStartupTimeout(parent, 1*time.Second)
+
+		if parent.State() == zsm.STA_RUNNING {
+			// v0.1～v0.2只找到1个parent即可
+			this.backups[raddr] = parent
+			this.parent = parent
 			return
 		}
 	}
 
-	parent := ParentNew(this.server)
-	this.backups[addr] = parent
-	go parent.Run()
-}
+	for _, raddr := range this.server.Context().StartupNodes() {
+		parent := this.createParent(raddr)
+		zsm.WaitForStartupTimeout(parent, 1*time.Second)
 
-func (this *ParentSupervisor) CreateParent(addr *net.TCPAddr) {
-	this.SendMsg3(PRTSPVS_CMD_CREATEPARENT, this, addr)
-}
-
-func (this *ParentSupervisor) PreLoop() (err error) {
-	zlog.Debugln("PS:", this, "starting")
-	return
-}
-
-func (this *ParentSupervisor) Loop() (ok bool, err error) {
-	// 1. 补充backups
-	// 2. 发现更合适的parent
-	// 3. 清理无效backups
-	<-time.After(100 * time.Millisecond)
+		if parent.State() == zsm.STA_RUNNING {
+			// v0.1～v0.2只找到1个parent即可
+			this.backups[raddr] = parent
+			this.parent = parent
+			return
+		}
+	}
 	return
 }
 
 func (this *ParentSupervisor) AfterLoop() {
-	zlog.Debugln("PS:", this, "stopping")
+	zlog.Debugln("PRTSPVS:", this, "is shutting down")
+	for raddr, parent := range this.backups {
+		parent.Shutdown()
+		delete(this.backups, raddr)
+	}
+	this.parent = nil
 }
 
 func (this *ParentSupervisor) CommandHandle(msg *zsm.Message) (bool, error) {
