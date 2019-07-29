@@ -67,7 +67,7 @@ func (this *ParentSupervisor) CreateParent(raddr *net.TCPAddr) {
 }
 
 func (this *ParentSupervisor) PreLoop() (err error) {
-	zlog.Debugln("PRTSPVS:", this, "is starting")
+	zlog.Debugln(this, "is starting")
 
 	workers := make([]zsm.WorkerI, 0)
 	for _, raddr := range this.server.Context().DefaultNodes() {
@@ -93,7 +93,7 @@ func (this *ParentSupervisor) PreLoop() (err error) {
 }
 
 func (this *ParentSupervisor) AfterLoop() {
-	zlog.Debugln("PRTSPVS:", this, "is shutting down")
+	zlog.Debugln(this, "is shutting down")
 	for raddr, parent := range this.backups {
 		parent.Shutdown()
 		delete(this.backups, raddr)

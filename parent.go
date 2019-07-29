@@ -46,7 +46,7 @@ func (this *Parent) RemoteAddr() *net.TCPAddr {
 }
 
 func (this *Parent) PreLoop() (err error) {
-	zlog.Debugln(this, "Starting up.")
+	zlog.Debugln(this, "is starting up")
 
 	// handshake1: receive serverInfo
 	bytes, err := ReadBytes(this.conn, PROTO_NODEINFO)
@@ -76,6 +76,7 @@ func (this *Parent) Loop() (ok bool, err error) {
 }
 
 func (this *Parent) AfterLoop() {
+	zlog.Debugln(this, "is shutting down")
 	this.conn.Close()
 }
 
